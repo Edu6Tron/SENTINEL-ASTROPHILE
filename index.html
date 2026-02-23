@@ -745,7 +745,7 @@ function buildRows(data) {
           <tr class="person-row-first">
             <td class="td-num" rowspan="${maxRows}">${String(rowNum).padStart(2,'0')}</td>
             <td class="td-name" rowspan="${maxRows}">${person.name}</td>
-            <td class="td-code" rowspan="${maxRows}">${person.code}</td>
+            <td class="td-code" rowspan="${maxRows}">${'*'.repeat(String(person.code).length)}</td>
             <td class="td-entry">${entryTime ? entryTime : '<span class="td-missing">—</span>'}</td>
             <td class="td-exit">${exitTime  ? exitTime  : '<span class="td-missing">—</span>'}</td>
             <td class="td-dur">${duration}</td>
@@ -814,7 +814,7 @@ function buildDeniedSection() {
                 <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;
                            color:var(--denied);">${d.time}</td>
                 <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;
-                           letter-spacing:3px;color:var(--text-dim);">${d.code}</td>
+           letter-spacing:3px;color:var(--text-dim);">${'*'.repeat(String(d.code).length)}</td>
               </tr>`).join('')}
           </tbody>
         </table>
