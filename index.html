@@ -147,23 +147,44 @@
       flex-wrap: wrap;
     }
 
-    input[type="date"] {
+    /* ── CUSTOM DATE DROPDOWNS (works on all Android browsers) ── */
+    .date-dropdowns {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .date-select {
       background: var(--bg3);
       border: 1px solid var(--border);
       border-radius: 6px;
       color: var(--accent);
       font-family: var(--mono);
-      font-size: 18px;
-      padding: 10px 16px;
+      font-size: 16px;
+      padding: 10px 10px;
       outline: none;
       cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
       transition: border-color 0.2s, box-shadow 0.2s;
-      color-scheme: dark;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300d4ff' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
     }
-    input[type="date"]:hover,
-    input[type="date"]:focus {
+    .date-select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+    }
+    .date-select option {
+      background: var(--bg3);
+      color: var(--text);
+    }
+    .date-sep {
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 18px;
+      user-select: none;
     }
 
     .btn {
@@ -476,6 +497,21 @@
       .search-box { width: 100%; }
       .table-header { flex-direction: column; gap: 10px; align-items: flex-start; }
     }
+    /* ── NO-EXIT BADGE ──────────────────────────────────── */
+    .badge-no-exit {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #ffaa00;
+      background: rgba(255,170,0,0.1);
+      border: 1px solid rgba(255,170,0,0.35);
+      white-space: nowrap;
+    }
+    tr.no-exit-row td { background: rgba(255,170,0,0.04) !important; }
+
     /* ── WARNING ROWS (bad entry/exit pair) ─────────────── */
     tr[data-warn="1"] { background: rgba(255,107,53,0.07) !important; }
     .td-entry-warn { color: var(--warn) !important; font-family: var(--mono); font-size:13px; }
@@ -503,11 +539,24 @@
 
 <main>
 
-  <!-- DATE PICKER -->
+  <!-- DATE PICKER — custom dropdowns for full mobile compatibility -->
   <div class="picker-section">
     <div class="picker-label">Select Date to View Logs</div>
     <div class="picker-row">
-      <input type="date" id="datePicker" />
+      <div class="date-dropdowns">
+        <select class="date-select" id="pickDay"></select>
+        <span class="date-sep">/</span>
+        <select class="date-select" id="pickMonth">
+          <option value="01">Jan</option><option value="02">Feb</option>
+          <option value="03">Mar</option><option value="04">Apr</option>
+          <option value="05">May</option><option value="06">Jun</option>
+          <option value="07">Jul</option><option value="08">Aug</option>
+          <option value="09">Sep</option><option value="10">Oct</option>
+          <option value="11">Nov</option><option value="12">Dec</option>
+        </select>
+        <span class="date-sep">/</span>
+        <select class="date-select" id="pickYear"></select>
+      </div>
       <button class="btn btn-primary" onclick="loadLogs()">Load Logs</button>
       <button class="btn btn-today"   onclick="setToday()">Today</button>
     </div>
@@ -572,21 +621,52 @@ db.ref('.info/connected').on('value', snap => {
   }
 });
 
+// ── Dropdown date picker init ─────────────────────────────────
+function initDropdowns() {
+  // Populate day options 01-31
+  const dayEl = document.getElementById('pickDay');
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option');
+    o.value = String(d).padStart(2,'0');
+    o.textContent = String(d).padStart(2,'0');
+    dayEl.appendChild(o);
+  }
+  // Populate year options: current year down to 2024
+  const yearEl = document.getElementById('pickYear');
+  const curYear = new Date().getFullYear();
+  for (let y = curYear; y >= 2024; y--) {
+    const o = document.createElement('option');
+    o.value = String(y);
+    o.textContent = String(y);
+    yearEl.appendChild(o);
+  }
+}
+initDropdowns();
+
+// Returns {val: "YYYY-MM-DD", logDate: "DD/MM/YYYY"} from the three dropdowns
+function getPickerValue() {
+  const d = document.getElementById('pickDay').value;
+  const m = document.getElementById('pickMonth').value;
+  const y = document.getElementById('pickYear').value;
+  return {
+    val:     `${y}-${m}-${d}`,      // for friendlyDate
+    logDate: `${d}/${m}/${y}`       // matches ACCESS.CSV format
+  };
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 function setToday() {
   const now = new Date();
-  const y = now.getFullYear();
+  const y = String(now.getFullYear());
   const m = String(now.getMonth()+1).padStart(2,'0');
   const d = String(now.getDate()).padStart(2,'0');
-  document.getElementById('datePicker').value = `${y}-${m}-${d}`;
+  document.getElementById('pickDay').value   = d;
+  document.getElementById('pickMonth').value = m;
+  document.getElementById('pickYear').value  = y;
   loadLogs();
 }
 setToday();
 
-function inputToLogDate(val) {
-  const [y, m, d] = val.split('-');
-  return `${d}/${m}/${y}`;
-}
 function friendlyDate(val) {
   const [y,m,d] = val.split('-').map(Number);
   return new Date(y, m-1, d).toLocaleDateString('en-IN', {
@@ -600,10 +680,8 @@ let deniedData  = [];   // [{time, code}, ...]
 
 // ── Load logs ────────────────────────────────────────────────
 function loadLogs() {
-  const pickerVal = document.getElementById('datePicker').value;
+  const { val: pickerVal, logDate } = getPickerValue();
   if (!pickerVal) { alert('Please select a date first.'); return; }
-
-  const logDate      = inputToLogDate(pickerVal);
   const tableSection = document.getElementById('tableSection');
   const statsRow     = document.getElementById('statsRow');
 
@@ -645,7 +723,9 @@ function loadLogs() {
       if (!byCode[e.code]) {
         byCode[e.code] = { name: e.name, code: e.code, events: [] };
       }
-      byCode[e.code].events.push({ type: e.event, time: e.time });
+      // NO-EXIT is our synthetic end-of-day marker
+      const evType = (e.event === 'NO-EXIT') ? 'NO-EXIT' : e.event;
+      byCode[e.code].events.push({ type: evType, time: e.time });
     });
 
     pairedData = Object.values(byCode).map(person => {
@@ -659,15 +739,19 @@ function loadLogs() {
           if (openStack.length > 0) {
             const entryTime = openStack.pop();
             const valid = toSec(ev.time) > toSec(entryTime);
-            pairs.push({ entry: entryTime, exit: ev.time, warning: !valid });
+            pairs.push({ entry: entryTime, exit: ev.time, warning: !valid, noExit: false });
           } else {
-            pairs.push({ entry: null, exit: ev.time, warning: false });
+            pairs.push({ entry: null, exit: ev.time, warning: false, noExit: false });
           }
+        } else if (ev.type === 'NO-EXIT') {
+          // End-of-day auto-close: person never exited
+          const entryTime = openStack.length > 0 ? openStack.pop() : null;
+          pairs.push({ entry: entryTime, exit: null, warning: false, noExit: true });
         }
       });
 
-      // Still inside — no exit yet
-      openStack.forEach(t => pairs.push({ entry: t, exit: null, warning: false }));
+      // Still inside — no exit yet (as of last check)
+      openStack.forEach(t => pairs.push({ entry: t, exit: null, warning: false, noExit: false }));
 
       // Sort by entry time (nulls last)
       pairs.sort((a, b) => {
@@ -686,12 +770,15 @@ function loadLogs() {
       return ta.localeCompare(tb);
     });
 
+    
     // Stats
     const totalEntry  = dayLogs.filter(e => e.event === 'ENTRY').length;
     const totalExit   = dayLogs.filter(e => e.event === 'EXIT').length;
     const totalDenied = dayLogs.filter(e => e.event === 'DENIED').length;
+    const totalNoExit = dayLogs.filter(e => e.event === 'NO-EXIT').length;
 
-    document.getElementById('statTotal').textContent  = dayLogs.length;
+    // Total shows real taps only (exclude synthetic NO-EXIT)
+    document.getElementById('statTotal').textContent  = dayLogs.length - totalNoExit;
     document.getElementById('statEntry').textContent  = totalEntry;
     document.getElementById('statExit').textContent   = totalExit;
     document.getElementById('statDenied').textContent = totalDenied;
@@ -762,7 +849,7 @@ function renderTable(tableSection, statsRow, pickerVal) {
   }, 80);
 }
 
-// ── Convert HH:MM:SS → total seconds ────────────────────────
+// ── Convert HH:MM:SS → total seconds ─────────────────────────
 function toSec(t) {
   if (!t) return 0;
   const [h,m,s] = t.split(':').map(Number);
@@ -786,8 +873,6 @@ function calcDuration(entry, exit, warning) {
 }
 
 // ── Build paired attendance rows ──────────────────────────────
-// person.pairs = [{entry, exit, warning}, ...]
-// warning=true → exit before entry (power-reset artefact) → highlight orange
 function buildRows(data) {
   if (data.length === 0) {
     return `<tr><td colspan="6">
@@ -801,9 +886,8 @@ function buildRows(data) {
   let rowNum = 1;
 
   data.forEach(person => {
-    const pairs   = person.pairs;
-    const maxRows = pairs.length || 1;
-    // keep your **** masking for codes
+    const pairs      = person.pairs;
+    const maxRows    = pairs.length || 1;
     const maskedCode = '*'.repeat(String(person.code).length);
 
     pairs.forEach((pair, i) => {
@@ -811,16 +895,25 @@ function buildRows(data) {
         ? `<span class="${pair.warning ? 'td-entry-warn' : ''}">${pair.entry}</span>`
         : '<span class="td-missing">—</span>';
 
-      const exitCell = pair.exit
-        ? `<span class="${pair.warning ? 'td-exit-warn' : ''}">${pair.exit}</span>`
-        : '<span class="td-missing">—</span>';
-
-      const durCell  = calcDuration(pair.entry, pair.exit, pair.warning);
-      const warnAttr = pair.warning ? ' data-warn="1"' : '';
+      // NO-EXIT: end-of-day auto-close — person never exited
+      let exitCell, durCell, warnAttr, rowExtra;
+      if (pair.noExit) {
+        exitCell = '<span class="badge-no-exit">⏱ No Exit</span>';
+        durCell  = '<span class="td-missing">—</span>';
+        warnAttr = '';
+        rowExtra = ' class="no-exit-row"';
+      } else {
+        exitCell = pair.exit
+          ? `<span class="${pair.warning ? 'td-exit-warn' : ''}">${pair.exit}</span>`
+          : '<span class="td-missing">—</span>';
+        durCell  = calcDuration(pair.entry, pair.exit, pair.warning);
+        warnAttr = pair.warning ? ' data-warn="1"' : '';
+        rowExtra = '';
+      }
 
       if (i === 0) {
         html += `
-          <tr class="person-row-first"${warnAttr}>
+          <tr class="person-row-first"${warnAttr}${rowExtra}>
             <td class="td-num"  rowspan="${maxRows}">${String(rowNum).padStart(2,'0')}</td>
             <td class="td-name" rowspan="${maxRows}">${person.name}</td>
             <td class="td-code" rowspan="${maxRows}">${maskedCode}</td>
@@ -830,7 +923,7 @@ function buildRows(data) {
           </tr>`;
       } else {
         html += `
-          <tr class="person-row-extra"${warnAttr}>
+          <tr class="person-row-extra"${warnAttr}${rowExtra}>
             <td class="td-entry">${entryCell}</td>
             <td class="td-exit">${exitCell}</td>
             <td class="td-dur">${durCell}</td>
@@ -858,23 +951,17 @@ function buildDeniedSection() {
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr style="background:var(--bg3);">
-              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;
-                         color:var(--text-dim);text-align:left;">#</th>
-              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;
-                         color:var(--text-dim);text-align:left;">Time</th>
-              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;
-                         color:var(--text-dim);text-align:left;">Code Tried</th>
+              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">#</th>
+              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">Time</th>
+              <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">Code Tried</th>
             </tr>
           </thead>
           <tbody>
             ${deniedData.map((d,i) => `
               <tr style="border-top:1px solid rgba(255,59,92,0.1);">
-                <td style="padding:10px 18px;font-family:var(--mono);font-size:11px;
-                           color:var(--text-dim);">${String(i+1).padStart(2,'0')}</td>
-                <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;
-                           color:var(--denied);">${d.time}</td>
-                <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;
-           letter-spacing:3px;color:var(--text-dim);">${'*'.repeat(String(d.code).length)}</td>
+                <td style="padding:10px 18px;font-family:var(--mono);font-size:11px;color:var(--text-dim);">${String(i+1).padStart(2,'0')}</td>
+                <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;color:var(--denied);">${d.time}</td>
+                <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;letter-spacing:3px;color:var(--text-dim);">${'*'.repeat(String(d.code).length)}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -882,17 +969,7 @@ function buildDeniedSection() {
     </div>`;
 }
 
-// ── Search filter ─────────────────────────────────────────────
-function filterRows(query) {
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? pairedData.filter(p => p.name.toLowerCase().includes(q))
-    : pairedData;
-  const tbody = document.getElementById('tableBody');
-  if (tbody) tbody.innerHTML = buildRows(filtered);
-}
-
-// ── Highlight warning rows after DOM update ──────────────────
+// ── Highlight warning rows ────────────────────────────────────
 function highlightWarnings() {
   document.querySelectorAll('tr[data-warn="1"]').forEach(tr => {
     tr.style.background = 'rgba(255,107,53,0.07)';
@@ -911,10 +988,6 @@ function filterRows(query) {
     highlightWarnings();
   }
 }
-
-document.getElementById('datePicker').addEventListener('keydown', e => {
-  if (e.key === 'Enter') loadLogs();
-});
 </script>
 </body>
 </html>
