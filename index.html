@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SENTINEL — Access Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg:       #080c10; --bg2: #0d1117; --bg3: #111820;
+      --border:   #1e2d3d; --accent: #00d4ff; --accent2: #00ff99;
+      --warn:     #ff6b35; --denied: #ff3b5c; --entry: #00ff99;
+      --exit:     #00d4ff; --text: #c9d1d9;  --text-dim: #4a5568;
+      --purple:   #c084fc; --gold: #fbbf24;
+      --mono:     'Share Tech Mono', monospace;
+      --ui:       'Rajdhani', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--ui); min-height: 100vh; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,212,255,0.015) 2px,rgba(0,212,255,0.015) 4px);
+      pointer-events: none; z-index: 1000;
+    }
+
+    /* ── HEADER ─────────────────────────────────── */
+    header {
+      border-bottom: 1px solid var(--border); padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg2); position: sticky; top: 0; z-index: 100;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .logo { display: flex; align-items: baseline; gap: 12px; }
+    .logo-main { font-family: var(--mono); font-size: 22px; color: var(--accent); letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,212,255,0.5); }
+    .logo-sub  { font-size: 12px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .status-pill {
+      display: flex; align-items: center; gap: 8px; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 6px 14px; font-size: 13px; font-family: var(--mono);
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); transition: background 0.3s; }
+    .status-dot.connected { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    .status-dot.error     { background: var(--denied);  box-shadow: 0 0 8px var(--denied); }
+
+    /* Download header button */
+    .btn-dl-header {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(192,132,252,0.12); border: 1px solid rgba(192,132,252,0.4);
+      color: var(--purple); border-radius: 20px; padding: 6px 16px;
+      font-family: var(--ui); font-size: 13px; font-weight: 700;
+      letter-spacing: 1.5px; cursor: pointer; transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .btn-dl-header:hover { background: rgba(192,132,252,0.22); box-shadow: 0 0 14px rgba(192,132,252,0.3); }
+    .btn-dl-header svg { width: 15px; height: 15px; }
+
+    /* Sub active badge */
+    #subActiveBadge {
+      display: none; align-items: center; gap: 7px;
+      background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35);
+      color: var(--gold); border-radius: 20px; padding: 5px 12px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer; white-space: nowrap;
+    }
+    #subActiveBadge.show { display: flex; }
+    #subActiveBadge:hover { background: rgba(251,191,36,0.18); }
+
+    /* ── SUB BANNER ─────────────────────────────── */
+    #subBanner {
+      display: none; background: rgba(251,191,36,0.08);
+      border-bottom: 1px solid rgba(251,191,36,0.25); padding: 10px 32px;
+      font-size: 13px; font-family: var(--mono); color: var(--gold);
+      align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    #subBanner.show { display: flex; }
+    #subBanner strong { color: #fde68a; }
+    .sub-cancel-btn {
+      margin-left: auto; background: rgba(255,59,92,0.12); border: 1px solid rgba(255,59,92,0.3);
+      color: var(--denied); border-radius: 4px; padding: 3px 10px;
+      font-size: 11px; font-family: var(--mono); cursor: pointer; letter-spacing: 1px;
+    }
+    .sub-cancel-btn:hover { background: rgba(255,59,92,0.22); }
+
+    /* ── MAIN ───────────────────────────────────── */
+    main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+    /* ── PICKER ─────────────────────────────────── */
+    .picker-section {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 28px 32px; margin-bottom: 32px;
+      position: relative; overflow: hidden;
+    }
+    .picker-section::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+    .picker-label { font-size: 11px; letter-spacing: 3px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 16px; }
+    .picker-row   { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .date-dropdowns { display: flex; gap: 8px; align-items: center; }
+    .date-select {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--accent); font-family: var(--mono); font-size: 16px; padding: 10px 30px 10px 10px;
+      outline: none; cursor: pointer; appearance: none; -webkit-appearance: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300d4ff' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    .date-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,255,0.15); }
+    .date-select option { background: var(--bg3); color: var(--text); }
+    .date-sep { color: var(--text-dim); font-family: var(--mono); font-size: 18px; user-select: none; }
+    .btn { font-family: var(--ui); font-weight: 700; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; padding: 11px 28px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: var(--bg); }
+    .btn-primary:hover { background: #33ddff; box-shadow: 0 0 20px rgba(0,212,255,0.4); transform: translateY(-1px); }
+    .btn-today { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); font-size: 13px; padding: 10px 20px; }
+    .btn-today:hover { background: rgba(0,255,153,0.08); box-shadow: 0 0 12px rgba(0,255,153,0.2); }
+
+    /* ── STATS ──────────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; opacity: 0; transform: translateY(10px); transition: all 0.4s ease; }
+    .stats-row.visible { opacity: 1; transform: translateY(0); }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; position: relative; overflow: hidden; }
+    .stat-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; }
+    .stat-card.total::after   { background: var(--accent); }
+    .stat-card.entries::after { background: var(--entry); }
+    .stat-card.exits::after   { background: var(--exit); }
+    .stat-card.denied::after  { background: var(--denied); }
+    .stat-val { font-family: var(--mono); font-size: 36px; line-height: 1; margin-bottom: 6px; }
+    .stat-card.total   .stat-val { color: var(--accent); }
+    .stat-card.entries .stat-val { color: var(--entry); }
+    .stat-card.exits   .stat-val { color: var(--exit); }
+    .stat-card.denied  .stat-val { color: var(--denied); }
+    .stat-label { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
+
+    /* ── TABLE ──────────────────────────────────── */
+    .table-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; opacity: 0; transform: translateY(10px); transition: all 0.4s ease 0.1s; }
+    .table-section.visible { opacity: 1; transform: translateY(0); }
+    .table-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
+    .table-title { font-size: 13px; letter-spacing: 3px; color: var(--text-dim); text-transform: uppercase; }
+    .table-date-badge { font-family: var(--mono); font-size: 13px; color: var(--accent); background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); border-radius: 4px; padding: 4px 10px; }
+    .search-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 6px 12px; outline: none; width: 180px; transition: border-color 0.2s; }
+    .search-box:focus { border-color: var(--accent); }
+    .search-box::placeholder { color: var(--text-dim); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead tr { background: var(--bg3); border-bottom: 1px solid var(--border); }
+    th { text-align: left; padding: 12px 20px; font-size: 10px; letter-spacing: 2.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid rgba(30,45,61,0.6); transition: background 0.15s; }
+    tbody tr:hover { background: rgba(0,212,255,0.04); }
+    tbody tr:last-child { border-bottom: none; }
+    td { padding: 13px 20px; vertical-align: middle; }
+    .td-name { font-weight: 600; font-size: 15px; color: #e6edf3; }
+    .td-code { font-family: var(--mono); font-size: 13px; color: var(--text-dim); letter-spacing: 3px; }
+    .td-num  { font-family: var(--mono); font-size: 11px; color: var(--text-dim); width: 40px; }
+    .td-entry { font-family: var(--mono); font-size: 13px; color: var(--entry); padding: 11px 20px; }
+    .td-exit  { font-family: var(--mono); font-size: 13px; color: var(--exit); padding: 11px 20px; }
+    .td-dur   { padding: 11px 20px; }
+    .td-dur-val  { font-family: var(--mono); font-size: 13px; color: var(--warn); }
+    .td-missing  { color: var(--text-dim); font-family: var(--mono); }
+    .td-entry-warn, .td-exit-warn { color: var(--warn) !important; font-family: var(--mono); font-size: 13px; }
+    .td-warn-label { font-family: var(--mono); font-size: 11px; color: var(--warn); background: rgba(255,107,53,0.12); border: 1px solid rgba(255,107,53,0.3); border-radius: 4px; padding: 3px 8px; }
+    .person-row-first td { border-top: 1px solid rgba(0,212,255,0.12); }
+    .person-row-extra td { border-top: 1px dashed rgba(255,255,255,0.05); background: rgba(0,212,255,0.02); }
+    .person-separator td { padding: 0; height: 6px; background: var(--bg3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .td-name, .td-num, .td-code { vertical-align: top; padding-top: 13px; }
+    .badge-no-exit { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; padding: 3px 8px; border-radius: 4px; color: #ffaa00; background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.35); white-space: nowrap; }
+    tr.no-exit-row td { background: rgba(255,170,0,0.04) !important; }
+    tr[data-warn="1"] { background: rgba(255,107,53,0.07) !important; }
+    .state-box { padding: 60px 20px; text-align: center; color: var(--text-dim); }
+    .state-icon { font-size: 36px; margin-bottom: 14px; display: block; }
+    .state-title { font-size: 16px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .state-sub { font-size: 13px; font-family: var(--mono); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .loading .state-icon { animation: pulse 1.2s infinite; }
+
+    /* ── FOOTER ─────────────────────────────────── */
+    footer { text-align: center; padding: 30px; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; border-top: 1px solid var(--border); margin-top: 40px; }
+
+    /* ═══════════════════════════════════════════════
+       DOWNLOAD MODAL
+    ═══════════════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(4,8,16,0.85);
+      z-index: 500; display: flex; align-items: center; justify-content: center;
+      padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+      width: 100%; max-width: 520px; overflow: hidden;
+      transform: translateY(20px); transition: transform 0.25s;
+      box-shadow: 0 0 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.08);
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal-top {
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--purple), var(--accent), var(--accent2));
+    }
+    .modal-header {
+      position: relative; padding: 24px 24px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: 14px; letter-spacing: 3px; color: var(--purple); text-transform: uppercase; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 20px; padding: 4px 8px; border-radius: 4px; transition: color 0.2s; line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+
+    /* Options */
+    .dl-options { padding: 20px 24px 0; }
+    .dl-option {
+      display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px;
+      border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+      transition: all 0.15s; margin-bottom: 8px;
+    }
+    .dl-option:hover { background: rgba(0,212,255,0.04); border-color: var(--border); }
+    .dl-option.selected { background: rgba(192,132,252,0.08); border-color: rgba(192,132,252,0.4); }
+    .dl-option input[type="radio"] { display: none; }
+    .dl-radio {
+      width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
+      flex-shrink: 0; margin-top: 2px; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dl-option.selected .dl-radio { border-color: var(--purple); }
+    .dl-option.selected .dl-radio::after { content: ''; width: 8px; height: 8px; background: var(--purple); border-radius: 50%; display: block; }
+    .dl-opt-body { flex: 1; }
+    .dl-opt-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .dl-opt-sub { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+    .dl-option.selected .dl-opt-title { color: var(--purple); }
+
+    /* Sub duration picker */
+    .dl-sub-dur {
+      display: none; margin-top: 10px;
+      padding: 10px 12px; background: var(--bg3); border-radius: 6px; border: 1px solid var(--border);
+    }
+    .dl-sub-dur.show { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .dl-sub-dur label { font-size: 12px; color: var(--text-dim); letter-spacing: 1px; }
+    .dur-pill {
+      padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim); font-family: var(--mono);
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .dur-pill.active { background: rgba(192,132,252,0.15); border-color: var(--purple); color: var(--purple); }
+
+    /* Divider */
+    .modal-divider { height: 1px; background: var(--border); margin: 16px 24px 0; }
+
+    /* Schedule info box */
+    .modal-sched { padding: 16px 24px; }
+    .sched-note { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+    .sched-box {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px 18px; display: flex; align-items: center; gap: 14px;
+    }
+    .sched-icon { font-size: 22px; flex-shrink: 0; }
+    .sched-text-wrap {}
+    .sched-time { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+    .sched-countdown { font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .sched-box.ready { border-color: rgba(0,255,153,0.3); background: rgba(0,255,153,0.05); }
+    .sched-box.ready .sched-time { color: var(--accent2); }
+
+    /* Modal footer */
+    .modal-footer { padding: 16px 24px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 10px 22px; border-radius: 6px; font-family: var(--ui); font-size: 13px; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
+    .btn-ghost:hover { border-color: var(--text-dim); color: var(--text); }
+    .btn-dl-go {
+      background: var(--purple); color: #0d0014; padding: 10px 24px; border-radius: 6px;
+      font-family: var(--ui); font-weight: 700; font-size: 13px; letter-spacing: 2px;
+      text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-dl-go:hover { filter: brightness(1.15); box-shadow: 0 0 18px rgba(192,132,252,0.4); }
+    .btn-dl-go:disabled { opacity: 0.4; cursor: not-allowed; filter: none; box-shadow: none; }
+
+    /* Download progress toast */
+    #dlToast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 600;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 20px; min-width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(80px); opacity: 0; transition: all 0.3s;
+      font-family: var(--mono); font-size: 13px;
+    }
+    #dlToast.show { transform: translateY(0); opacity: 1; }
+    #dlToast.success { border-color: rgba(0,255,153,0.3); }
+    #dlToast.error   { border-color: rgba(255,59,92,0.3); }
+    .toast-icon { font-size: 18px; margin-bottom: 6px; display: block; }
+    .toast-msg  { color: var(--text); }
+    .toast-sub  { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+
+    /* ── RESPONSIVE ─────────────────────────────── */
+    @media (max-width: 700px) {
+      header { padding: 12px 16px; }
+      main { padding: 20px 12px; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+      .picker-row { flex-direction: column; align-items: flex-start; }
+      th, td { padding: 10px 12px; }
+      .search-box { width: 100%; }
+      .table-header { flex-direction: column; gap: 10px; align-items: flex-start; }
+      .modal { max-width: 100%; }
+      .logo-sub { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <span class="logo-main">SENTINEL</span>
+    <span class="logo-sub">Access Control</span>
+  </div>
+  <div class="header-right">
+    <div id="subActiveBadge" onclick="openDlModal()">
+      ⬇ AUTO-DL: <strong id="subBadgeTxt">active</strong>
+    </div>
+    <button class="btn-dl-header" onclick="openDlModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download
+    </button>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText" style="color:var(--text-dim)">Connecting...</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── SUBSCRIPTION BANNER ──────────────────────────────────── -->
+<div id="subBanner">
+  <span>⬇ AUTO-DOWNLOAD</span>
+  <span id="subBannerTxt"></span>
+  <button class="sub-cancel-btn" onclick="cancelSubConfirm()">Cancel subscription</button>
+</div>
+
+<!-- ── MAIN ─────────────────────────────────────────────────── -->
+<main>
+  <div class="picker-section">
+    <div class="picker-label">Select Date to View Logs</div>
+    <div class="picker-row">
+      <div class="date-dropdowns">
+        <select class="date-select" id="pickDay"></select>
+        <span class="date-sep">/</span>
+        <select class="date-select" id="pickMonth">
+          <option value="01">Jan</option><option value="02">Feb</option>
+          <option value="03">Mar</option><option value="04">Apr</option>
+          <option value="05">May</option><option value="06">Jun</option>
+          <option value="07">Jul</option><option value="08">Aug</option>
+          <option value="09">Sep</option><option value="10">Oct</option>
+          <option value="11">Nov</option><option value="12">Dec</option>
+        </select>
+        <span class="date-sep">/</span>
+        <select class="date-select" id="pickYear"></select>
+      </div>
+      <button class="btn btn-primary" onclick="loadLogs()">Load Logs</button>
+      <button class="btn btn-today"   onclick="setToday()">Today</button>
+    </div>
+  </div>
+
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card total">   <div class="stat-val" id="statTotal">0</div><div class="stat-label">Total Events</div></div>
+    <div class="stat-card entries"> <div class="stat-val" id="statEntry">0</div><div class="stat-label">Entries</div></div>
+    <div class="stat-card exits">   <div class="stat-val" id="statExit">0</div> <div class="stat-label">Exits</div></div>
+    <div class="stat-card denied">  <div class="stat-val" id="statDenied">0</div><div class="stat-label">Denied</div></div>
+  </div>
+
+  <div class="table-section" id="tableSection">
+    <div class="state-box">
+      <span class="state-icon">📅</span>
+      <div class="state-title">Pick a Date</div>
+      <div class="state-sub">Select a date above and click Load Logs</div>
+    </div>
+  </div>
+</main>
+
+<footer>Team ASTROPHILE &nbsp;·&nbsp; SENTINEL v3.2 &nbsp;·&nbsp; Firebase Realtime DB</footer>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DOWNLOAD MODAL
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="dlOverlay" onclick="overlayClick(event)">
+  <div class="modal" id="dlModal">
+    <div class="modal-top"></div>
+
+    <div class="modal-header">
+      <div class="modal-title">📥 Request Download</div>
+      <button class="modal-close" onclick="closeDlModal()">✕</button>
+    </div>
+
+    <div class="dl-options">
+
+      <!-- Option 1: Today -->
+      <div class="dl-option selected" id="opt-today" onclick="selectOpt('today')">
+        <div class="dl-radio"></div>
+        <div class="dl-opt-body">
+          <div class="dl-opt-title">Today's log</div>
+          <div class="dl-opt-sub">All events from today only · downloads after 23:57 IST</div>
+        </div>
+      </div>
+
+      <!-- Option 2: This week -->
+      <div class="dl-option" id="opt-week" onclick="selectOpt('week')">
+        <div class="dl-radio"></div>
+        <div class="dl-opt-body">
+          <div class="dl-opt-title">This week till today</div>
+          <div class="dl-opt-sub">Monday through today · single Excel file · after 23:57 IST</div>
+        </div>
+      </div>
+
+      <!-- Option 3: All till today -->
+      <div class="dl-option" id="opt-all" onclick="selectOpt('all')">
+        <div class="dl-radio"></div>
+        <div class="dl-opt-body">
+          <div class="dl-opt-title">All records till today</div>
+          <div class="dl-opt-sub">Complete historical database · one file · after 23:57 IST</div>
+        </div>
+      </div>
+
+      <!-- Option 4: Till yesterday -->
+      <div class="dl-option" id="opt-yesterday" onclick="selectOpt('yesterday')">
+        <div class="dl-radio"></div>
+        <div class="dl-opt-body">
+          <div class="dl-opt-title">Till yesterday</div>
+          <div class="dl-opt-sub">Everything up to and including yesterday · downloads immediately</div>
+        </div>
+      </div>
+
+      <!-- Option 5: Daily auto-download -->
+      <div class="dl-option" id="opt-daily" onclick="selectOpt('daily')">
+        <div class="dl-radio"></div>
+        <div class="dl-opt-body">
+          <div class="dl-opt-title">Daily auto-download</div>
+          <div class="dl-opt-sub">Saves each day's Excel automatically at 23:57 IST · catches up missed days on reconnect</div>
+          <div class="dl-sub-dur" id="durPicker">
+            <label>Duration:</label>
+            <button class="dur-pill active" id="dur7"  onclick="selectDur(7,event)">7 days</button>
+            <button class="dur-pill"        id="dur30" onclick="selectDur(30,event)">30 days</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /dl-options -->
+
+    <div class="modal-divider"></div>
+
+    <!-- Schedule info -->
+    <div class="modal-sched">
+      <div class="sched-note">Execution schedule</div>
+      <div class="sched-box" id="schedBox">
+        <span class="sched-icon" id="schedIcon">⏰</span>
+        <div class="sched-text-wrap">
+          <div class="sched-time" id="schedTime">Tonight at 23:57 IST</div>
+          <div class="sched-countdown" id="schedCountdown">calculating...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeDlModal()">Cancel</button>
+      <button class="btn-dl-go" id="dlGoBtn" onclick="confirmDownload()">Schedule Download</button>
+    </div>
+
+  </div><!-- /modal -->
+</div><!-- /overlay -->
+
+<!-- Toast -->
+<div id="dlToast">
+  <span class="toast-icon" id="toastIcon">⬇</span>
+  <div class="toast-msg" id="toastMsg">Preparing download...</div>
+  <div class="toast-sub" id="toastSub"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════════ -->
+<script>
+// ── Firebase config ────────────────────────────────────────────
+const FIREBASE_DB_URL = "https://sentinel-4a4e4-default-rtdb.firebaseio.com/";
+const FIREBASE_API_KEY = "AIzaSyCT5CqJfQw8FNHYBO297t4-EcnrvTrxMi4";
+firebase.initializeApp({ apiKey: FIREBASE_API_KEY, databaseURL: FIREBASE_DB_URL });
+const db = firebase.database();
+
+// ── Connection status ──────────────────────────────────────────
+const dot = document.getElementById('statusDot'), statusTx = document.getElementById('statusText');
+let wasConnected = false;
+db.ref('.info/connected').on('value', snap => {
+  const on = snap.val();
+  dot.className = 'status-dot ' + (on ? 'connected' : 'error');
+  statusTx.textContent = on ? 'Live' : 'Offline';
+  statusTx.style.color = on ? 'var(--accent2)' : 'var(--denied)';
+  if (on && !wasConnected) { wasConnected = true; checkSubCatchup(); }
+  if (!on) wasConnected = false;
+});
+
+// ── Dropdown init ──────────────────────────────────────────────
+function initDropdowns() {
+  const dayEl = document.getElementById('pickDay');
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option');
+    o.value = o.textContent = String(d).padStart(2,'0');
+    dayEl.appendChild(o);
+  }
+  const yearEl = document.getElementById('pickYear'), yr = new Date().getFullYear();
+  for (let y = yr; y >= 2024; y--) {
+    const o = document.createElement('option');
+    o.value = o.textContent = String(y);
+    yearEl.appendChild(o);
+  }
+}
+initDropdowns();
+
+function getPickerValue() {
+  const d = document.getElementById('pickDay').value,
+        m = document.getElementById('pickMonth').value,
+        y = document.getElementById('pickYear').value;
+  return { val: `${y}-${m}-${d}`, logDate: `${d}/${m}/${y}` };
+}
+function setToday() {
+  const now = new Date(), y = String(now.getFullYear()),
+        m = String(now.getMonth()+1).padStart(2,'0'), d = String(now.getDate()).padStart(2,'0');
+  document.getElementById('pickDay').value   = d;
+  document.getElementById('pickMonth').value = m;
+  document.getElementById('pickYear').value  = y;
+  loadLogs();
+}
+setToday();
+function friendlyDate(val) {
+  const [y,m,d] = val.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+// ── Shared pair data ───────────────────────────────────────────
+let pairedData = [], deniedData = [];
+
+// ── Load logs ─────────────────────────────────────────────────
+function loadLogs() {
+  const { val: pickerVal, logDate } = getPickerValue();
+  const tableSection = document.getElementById('tableSection'), statsRow = document.getElementById('statsRow');
+  statsRow.classList.remove('visible'); tableSection.classList.remove('visible');
+  tableSection.innerHTML = `<div class="state-box loading"><span class="state-icon">⏳</span><div class="state-title">Loading</div><div class="state-sub">Fetching logs for ${logDate}...</div></div>`;
+
+  db.ref('/logs').orderByChild('date').equalTo(logDate).once('value').then(snap => {
+    const data = snap.val();
+    if (!data) { showEmpty(tableSection, statsRow, pickerVal); return; }
+    const dayLogs = Object.values(data).sort((a,b) => a.time.localeCompare(b.time));
+    if (!dayLogs.length) { showEmpty(tableSection, statsRow, pickerVal); return; }
+
+    const byCode = {}; deniedData = [];
+    dayLogs.forEach(e => {
+      if (e.event === 'DENIED') { deniedData.push({time:e.time,code:e.code}); return; }
+      if (!byCode[e.code]) byCode[e.code] = {name:e.name,code:e.code,events:[]};
+      byCode[e.code].events.push({type:e.event==='NO-EXIT'?'NO-EXIT':e.event, time:e.time});
+    });
+    pairedData = buildPaired(byCode);
+
+    const totalEntry  = dayLogs.filter(e=>e.event==='ENTRY').length,
+          totalExit   = dayLogs.filter(e=>e.event==='EXIT').length,
+          totalDenied = dayLogs.filter(e=>e.event==='DENIED').length,
+          totalNoExit = dayLogs.filter(e=>e.event==='NO-EXIT').length;
+    document.getElementById('statTotal').textContent  = dayLogs.length - totalNoExit;
+    document.getElementById('statEntry').textContent  = totalEntry;
+    document.getElementById('statExit').textContent   = totalExit;
+    document.getElementById('statDenied').textContent = totalDenied;
+    renderTable(tableSection, statsRow, pickerVal);
+  }).catch(err => {
+    tableSection.innerHTML = `<div class="state-box"><span class="state-icon">⚠️</span><div class="state-title">Error</div><div class="state-sub">${err.message}</div></div>`;
+  });
+}
+
+function buildPaired(byCode) {
+  return Object.values(byCode).map(person => {
+    const pairs = [], openStack = [];
+    person.events.forEach(ev => {
+      if (ev.type === 'ENTRY') { openStack.push(ev.time); }
+      else if (ev.type === 'EXIT') {
+        if (openStack.length) { const et = openStack.pop(); pairs.push({entry:et,exit:ev.time,warning:toSec(ev.time)<=toSec(et),noExit:false}); }
+        else pairs.push({entry:null,exit:ev.time,warning:false,noExit:false});
+      } else if (ev.type === 'NO-EXIT') {
+        pairs.push({entry:openStack.length?openStack.pop():null,exit:null,warning:false,noExit:true});
+      }
+    });
+    openStack.forEach(t => pairs.push({entry:t,exit:null,warning:false,noExit:false}));
+    pairs.sort((a,b)=>{ if(!a.entry&&!b.entry)return 0; if(!a.entry)return 1; if(!b.entry)return -1; return a.entry.localeCompare(b.entry); });
+    return {name:person.name, code:person.code, pairs};
+  }).sort((a,b)=>{
+    const ta=a.pairs[0]?.entry||a.pairs[0]?.exit||'', tb=b.pairs[0]?.entry||b.pairs[0]?.exit||'';
+    return ta.localeCompare(tb);
+  });
+}
+
+function showEmpty(ts, sr, pv) {
+  ts.innerHTML = `<div class="state-box"><span class="state-icon">🔍</span><div class="state-title">No Logs Found</div><div class="state-sub">No events for ${friendlyDate(pv)}</div></div>`;
+  ['statTotal','statEntry','statExit','statDenied'].forEach(id=>document.getElementById(id).textContent='0');
+  setTimeout(()=>{ sr.classList.add('visible'); ts.classList.add('visible'); },50);
+}
+
+function renderTable(ts, sr, pv) {
+  ts.innerHTML = `
+    <div class="table-header">
+      <div class="table-title">Attendance Log</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span class="table-date-badge">${friendlyDate(pv)}</span>
+        <input class="search-box" type="text" placeholder="Search name..." oninput="filterRows(this.value)" />
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Code</th>
+        <th style="color:var(--entry)">▶ Entry</th>
+        <th style="color:var(--exit)">◀ Exit</th>
+        <th>Duration</th>
+      </tr></thead>
+      <tbody id="tableBody">${buildRows(pairedData)}</tbody>
+    </table></div>
+    ${deniedData.length ? buildDeniedSection() : ''}`;
+  setTimeout(()=>{ sr.classList.add('visible'); ts.classList.add('visible'); highlightWarnings(); },80);
+}
+
+function toSec(t) { if(!t)return 0; const[h,m,s]=t.split(':').map(Number); return h*3600+m*60+s; }
+function calcDuration(entry,exit,warning) {
+  if(!entry||!exit) return '<span class="td-missing">—</span>';
+  if(warning)       return '<span class="td-warn-label">⚠ Bad data</span>';
+  const sec=toSec(exit)-toSec(entry);
+  if(sec<=0) return '<span class="td-warn-label">⚠ Bad data</span>';
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  const v = h>0?`${h}h ${m}m`:m>0?`${m}m ${s}s`:`${s}s`;
+  return `<span class="td-dur-val">${v}</span>`;
+}
+
+function buildRows(data) {
+  if(!data.length) return `<tr><td colspan="6"><div class="state-box" style="padding:30px"><span class="state-icon" style="font-size:24px">🔍</span><div class="state-sub">No matches</div></div></td></tr>`;
+  let html='',rowNum=1;
+  data.forEach(person=>{
+    const maxRows=person.pairs.length||1, masked='*'.repeat(String(person.code).length);
+    person.pairs.forEach((pair,i)=>{
+      const entryCell=pair.entry?`<span class="${pair.warning?'td-entry-warn':''}">${pair.entry}</span>`:'<span class="td-missing">—</span>';
+      let exitCell,durCell,warnAttr,rowExtra;
+      if(pair.noExit){exitCell='<span class="badge-no-exit">⏱ No Exit</span>';durCell='<span class="td-missing">—</span>';warnAttr='';rowExtra=' class="no-exit-row"';}
+      else{exitCell=pair.exit?`<span class="${pair.warning?'td-exit-warn':''}">${pair.exit}</span>`:'<span class="td-missing">—</span>';durCell=calcDuration(pair.entry,pair.exit,pair.warning);warnAttr=pair.warning?' data-warn="1"':'';rowExtra='';}
+      if(i===0) html+=`<tr class="person-row-first"${warnAttr}${rowExtra}><td class="td-num" rowspan="${maxRows}">${String(rowNum).padStart(2,'0')}</td><td class="td-name" rowspan="${maxRows}">${person.name}</td><td class="td-code" rowspan="${maxRows}">${masked}</td><td class="td-entry">${entryCell}</td><td class="td-exit">${exitCell}</td><td class="td-dur">${durCell}</td></tr>`;
+      else html+=`<tr class="person-row-extra"${warnAttr}${rowExtra}><td class="td-entry">${entryCell}</td><td class="td-exit">${exitCell}</td><td class="td-dur">${durCell}</td></tr>`;
+    });
+    rowNum++;
+    html+=`<tr class="person-separator"><td colspan="6"></td></tr>`;
+  });
+  return html;
+}
+
+function buildDeniedSection() {
+  return `<div style="padding:0 24px 24px;"><div style="border:1px solid rgba(255,59,92,0.25);border-radius:6px;overflow:hidden;margin-top:4px;">
+    <div style="background:rgba(255,59,92,0.08);padding:12px 18px;font-size:11px;letter-spacing:2px;color:var(--denied);text-transform:uppercase;border-bottom:1px solid rgba(255,59,92,0.2);">⛔ Access Denied Attempts</div>
+    <table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg3);">
+      <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">#</th>
+      <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">Time</th>
+      <th style="padding:10px 18px;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-align:left;">Code Tried</th>
+    </tr></thead><tbody>
+    ${deniedData.map((d,i)=>`<tr style="border-top:1px solid rgba(255,59,92,0.1);">
+      <td style="padding:10px 18px;font-family:var(--mono);font-size:11px;color:var(--text-dim);">${String(i+1).padStart(2,'0')}</td>
+      <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;color:var(--denied);">${d.time}</td>
+      <td style="padding:10px 18px;font-family:var(--mono);font-size:13px;letter-spacing:3px;color:var(--text-dim);">${'*'.repeat(String(d.code).length)}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function highlightWarnings() { document.querySelectorAll('tr[data-warn="1"]').forEach(tr=>tr.style.background='rgba(255,107,53,0.07)'); }
+function filterRows(q) {
+  q=q.trim().toLowerCase();
+  const filtered=q?pairedData.filter(p=>p.name.toLowerCase().includes(q)):pairedData;
+  const tbody=document.getElementById('tableBody');
+  if(tbody){tbody.innerHTML=buildRows(filtered);highlightWarnings();}
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  DOWNLOAD SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+// ── IST utilities ──────────────────────────────────────────────
+function getIST() {
+  return new Date(Date.now() + (5.5*3600000) + new Date().getTimezoneOffset()*60000);
+}
+function fmtDDMMYYYY(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+function fmtYMD(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function ymdToDDMMYYYY(ymd) {
+  const [y,m,d]=ymd.split('-'); return `${d}/${m}/${y}`;
+}
+function isPastEOD() {
+  const ist=getIST(); return ist.getHours()*60+ist.getMinutes()>=23*60+57;
+}
+function msToEOD() {
+  const ist=getIST(), target=new Date(ist);
+  target.setHours(23,57,0,0);
+  if(ist>=target) target.setDate(target.getDate()+1);
+  return target-ist;
+}
+function hmsFrom(ms) {
+  const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(sec).padStart(2,'0')}s`;
+}
+
+// ── Subscription storage ───────────────────────────────────────
+const SUB_KEY = 'SENTINEL_DL_SUB';
+function getSub()      { try{return JSON.parse(localStorage.getItem(SUB_KEY));}catch{return null;} }
+function saveSub(sub)  { localStorage.setItem(SUB_KEY, JSON.stringify(sub)); }
+function clearSub()    { localStorage.removeItem(SUB_KEY); }
+
+// ── Modal state ────────────────────────────────────────────────
+let selectedOpt = 'today', selectedDur = 7, countdownInterval = null;
+
+function selectOpt(opt) {
+  selectedOpt = opt;
+  ['today','week','all','yesterday','daily'].forEach(o => {
+    document.getElementById('opt-'+o).classList.toggle('selected', o===opt);
+  });
+  document.getElementById('durPicker').classList.toggle('show', opt==='daily');
+  updateSchedBox();
+}
+
+function selectDur(n, e) {
+  e.stopPropagation(); selectedDur = n;
+  document.getElementById('dur7').classList.toggle('active', n===7);
+  document.getElementById('dur30').classList.toggle('active', n===30);
+}
+
+function openDlModal() {
+  // Pre-select if subscription active
+  const sub=getSub();
+  if(sub){ selectOpt('daily'); selectedDur=sub.duration; document.getElementById('dur'+sub.duration).classList.add('active'); }
+  document.getElementById('dlOverlay').classList.add('open');
+  startCountdownInterval();
+  updateSchedBox();
+}
+function closeDlModal() {
+  document.getElementById('dlOverlay').classList.remove('open');
+  clearInterval(countdownInterval);
+}
+function overlayClick(e) { if(e.target===document.getElementById('dlOverlay')) closeDlModal(); }
+
+function updateSchedBox() {
+  const box=document.getElementById('schedBox'),
+        icon=document.getElementById('schedIcon'),
+        time=document.getElementById('schedTime'),
+        cd=document.getElementById('schedCountdown'),
+        btn=document.getElementById('dlGoBtn');
+
+  // 'yesterday' and re-opening 'daily' can run immediately
+  const canRunNow = (selectedOpt==='yesterday') || isPastEOD();
+
+  if(canRunNow) {
+    box.className='sched-box ready';
+    icon.textContent='✅';
+    time.textContent = selectedOpt==='yesterday' ? 'Runs immediately' : 'Past 23:57 IST — runs immediately';
+    cd.textContent='No waiting needed';
+    btn.textContent = selectedOpt==='daily' ? 'Start Auto-Download' : 'Download Now';
+  } else {
+    box.className='sched-box';
+    icon.textContent='⏰';
+    time.textContent='Tonight at 23:57 IST';
+    cd.textContent='Calculating...';
+    btn.textContent = selectedOpt==='daily' ? 'Start Auto-Download' : 'Schedule Download';
+  }
+}
+
+function startCountdownInterval() {
+  clearInterval(countdownInterval);
+  countdownInterval = setInterval(()=>{
+    const cd=document.getElementById('schedCountdown');
+    if(!cd) return;
+    if(isPastEOD()) { updateSchedBox(); return; }
+    cd.textContent='⏱ ' + hmsFrom(msToEOD()) + ' remaining';
+  }, 1000);
+}
+
+// ── Confirm & schedule ─────────────────────────────────────────
+let eodTimer = null;
+
+function confirmDownload() {
+  closeDlModal();
+  if(selectedOpt==='daily') { startDailySubscription(selectedDur); return; }
+  if(selectedOpt==='yesterday' || isPastEOD()) {
+    executeDownload(selectedOpt, 0, null, null);
+  } else {
+    showToast('⏰','Download Scheduled','Will auto-download at 23:57 IST tonight','');
+    clearTimeout(eodTimer);
+    eodTimer = setTimeout(()=>executeDownload(selectedOpt,0,null,null), msToEOD());
+  }
+}
+
+// ── Daily subscription ─────────────────────────────────────────
+function startDailySubscription(dur) {
+  const ist=getIST(), start=fmtYMD(ist);
+  const endDate=new Date(ist); endDate.setDate(endDate.getDate()+dur-1);
+  const sub = { duration:dur, startDate:start, endDate:fmtYMD(endDate), daysDownloaded:[] };
+  saveSub(sub); updateSubBanner();
+  showToast('📅','Auto-Download Active',`Runs nightly at 23:57 IST for ${dur} days`,'');
+  // Download today's log when EOD hits (or now if already past)
+  scheduleSubDayDownload();
+  // Also do catchup immediately
+  checkSubCatchup();
+}
+
+function scheduleSubDayDownload() {
+  clearTimeout(eodTimer);
+  if(isPastEOD()) { runSubTodayDownload(); }
+  else { eodTimer = setTimeout(runSubTodayDownload, msToEOD()+1000); }
+}
+
+function runSubTodayDownload() {
+  const sub=getSub(); if(!sub) return;
+  const ist=getIST(), today=fmtYMD(ist);
+  if(new Date(today) > new Date(sub.endDate)) { clearSub(); updateSubBanner(); return; }
+  if(!sub.daysDownloaded.includes(today)) {
+    executeDownload('today_sub', 0, today).then(()=>{
+      const s=getSub(); if(!s) return;
+      if(!s.daysDownloaded.includes(today)) s.daysDownloaded.push(today);
+      saveSub(s); updateSubBanner();
+      // Schedule next day
+      const nextMs=msToEOD(); // tomorrow's EOD if already past today's
+      eodTimer = setTimeout(runSubTodayDownload, nextMs+1000);
+    });
+  }
+}
+
+function checkSubCatchup() {
+  const sub=getSub(); if(!sub) return;
+  const ist=getIST(), today=fmtYMD(ist);
+  if(new Date(today) > new Date(sub.endDate)) { clearSub(); updateSubBanner(); return; }
+
+  // Find all days in range that are before today and not yet downloaded
+  const from=new Date(sub.startDate), to=new Date(today);
+  to.setDate(to.getDate()-1); // yesterday
+  const missed=[];
+  for(let d=new Date(from); d<=to; d.setDate(d.getDate()+1)) {
+    const ymd=fmtYMD(new Date(d));
+    if(!sub.daysDownloaded.includes(ymd)) missed.push(ymd);
+  }
+  if(missed.length) {
+    showToast('🔄','Catching up',`Downloading ${missed.length} missed day(s)...`,'');
+    (async ()=>{
+      for(const day of missed) {
+        await executeDownload('today_sub',0,day,null);
+        const s=getSub(); if(!s) return;
+        if(!s.daysDownloaded.includes(day)) s.daysDownloaded.push(day);
+        saveSub(s);
+      }
+      updateSubBanner();
+      showToast('✅','Catch-up complete',`${missed.length} day(s) downloaded`,'success');
+    })();
+  }
+  // Also re-schedule today's EOD download
+  scheduleSubDayDownload();
+}
+
+function cancelSubConfirm() {
+  if(confirm('Cancel daily auto-download subscription?')) { clearSub(); updateSubBanner(); clearTimeout(eodTimer); showToast('🚫','Subscription cancelled','',''); }
+}
+
+function updateSubBanner() {
+  const sub=getSub();
+  const badge=document.getElementById('subActiveBadge');
+  const banner=document.getElementById('subBanner');
+  if(!sub) { badge.classList.remove('show'); banner.classList.remove('show'); return; }
+  const ist=getIST(), today=fmtYMD(ist);
+  if(new Date(today)>new Date(sub.endDate)) { clearSub(); badge.classList.remove('show'); banner.classList.remove('show'); return; }
+  const end=new Date(sub.endDate), endIST=end;
+  const daysLeft=Math.max(0,Math.round((end-new Date(today))/(86400000)))+1;
+  badge.classList.add('show');
+  banner.classList.add('show');
+  document.getElementById('subBadgeTxt').textContent=`${daysLeft}d left`;
+  document.getElementById('subBannerTxt').innerHTML=`Active · <strong>${sub.duration}-day plan</strong> · ${sub.daysDownloaded.length} downloaded · ${daysLeft} day(s) remaining · ends ${ymdToDDMMYYYY(sub.endDate)}`;
+}
+
+// ── Execute download ───────────────────────────────────────────
+async function executeDownload(type, dur=0, specificDate=null, win=null) {
+  showToast('⬇','Fetching data...','Connecting to Firebase','');
+  try {
+    let logs=[], label='', filename='';
+    const ist=getIST(), todayDDMM=fmtDDMMYYYY(ist);
+
+    if(type==='today') {
+      logs=await fetchByDateStr(todayDDMM);
+      label=`Today · ${todayDDMM}`;
+      filename=`SENTINEL_Today_${todayDDMM.replace(/\//g,'-')}.xlsx`;
+
+    } else if(type==='today_sub' && specificDate) {
+      const ddmm=ymdToDDMMYYYY(specificDate);
+      logs=await fetchByDateStr(ddmm);
+      label=`${ddmm}`;
+      filename=`SENTINEL_Daily_${specificDate}.xlsx`;
+
+    } else if(type==='week') {
+      const monday=getMondayIST(ist);
+      const dates=dateRange(monday,ist).map(d=>fmtDDMMYYYY(d));
+      const all=await fetchAll();
+      logs=all.filter(l=>dates.includes(l.date));
+      const monStr=fmtDDMMYYYY(monday);
+      label=`This week · ${monStr} – ${todayDDMM}`;
+      filename=`SENTINEL_Week_${monStr.replace(/\//g,'-')}_to_${todayDDMM.replace(/\//g,'-')}.xlsx`;
+
+    } else if(type==='all') {
+      logs=await fetchAll();
+      label=`All records till ${todayDDMM}`;
+      filename=`SENTINEL_AllRecords_till_${todayDDMM.replace(/\//g,'-')}.xlsx`;
+
+    } else if(type==='yesterday') {
+      const yest=new Date(ist); yest.setDate(yest.getDate()-1);
+      const all=await fetchAll();
+      const yestDDMM=fmtDDMMYYYY(yest);
+      // Exclude today
+      logs=all.filter(l=>l.date!==todayDDMM);
+      label=`All till ${yestDDMM}`;
+      filename=`SENTINEL_TillYesterday_${yestDDMM.replace(/\//g,'-')}.xlsx`;
+    }
+
+    if(!logs.length) {
+      showToast('🔍','No data found','No entries for this period','error');
+      return;
+    }
+    const count = logs.filter(l=>l.event!=='DENIED'&&l.event!=='NO-EXIT').length;
+    buildAndDownloadCSV(logs, filename.replace('.xlsx','.csv'), label, win);
+    showToast('✅',`File ready — check new tab or Downloads`,`${count} events`,'success');
+  } catch(err) {
+    showToast('⚠️','Download failed',err.message,'error');
+    throw err;
+  }
+}
+
+function getMondayIST(ist) {
+  const d=new Date(ist), day=d.getDay(), diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff); d.setHours(0,0,0,0); return d;
+}
+function dateRange(from,to) {
+  const dates=[]; const cur=new Date(from); cur.setHours(0,0,0,0);
+  const end=new Date(to); end.setHours(23,59,59,999);
+  while(cur<=end) { dates.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+
+async function fetchByDateStr(ddmmyyyy) {
+  const snap=await db.ref('/logs').orderByChild('date').equalTo(ddmmyyyy).once('value');
+  return snap.val() ? Object.values(snap.val()) : [];
+}
+async function fetchAll() {
+  const snap=await db.ref('/logs').once('value');
+  return snap.val() ? Object.values(snap.val()) : [];
+}
+
+// ── File export via Web Share API (native Android share sheet) ──────
+function buildAndDownloadCSV(logs, filename, periodLabel, win=null) {
+  // Close stray blank tab if any
+  if (win && !win.closed) try { win.close(); } catch(e){}
+
+  const sorted = [...logs].sort((a,b)=>{
+    const da=a.date.split('/').reverse().join(''), db=b.date.split('/').reverse().join('');
+    return da!==db ? da.localeCompare(db) : a.time.localeCompare(b.time);
+  });
+
+  const esc = v => {
+    const s = String(v==null?'':v);
+    return (s.includes(',')||s.includes('"')||s.includes('\n'))
+      ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+
+  const lines = [];
+  lines.push('SENTINEL v3.2 Access Log');
+  lines.push('Period: ' + periodLabel);
+  lines.push('Generated: ' + getIST().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}) + ' IST');
+  lines.push('Team: ASTROPHILE');
+  lines.push('');
+  lines.push(['Date','Time','Event','Name','Code'].map(esc).join(','));
+  sorted.forEach(l => lines.push([l.date,l.time,l.event,l.name,'****'].map(esc).join(',')));
+
+  const byDate={};
+  sorted.forEach(l=>{ if(!byDate[l.date]) byDate[l.date]=[]; byDate[l.date].push(l); });
+  lines.push(''); lines.push('--- SUMMARY ---');
+  lines.push(['Date','Entries','Exits','No-Exit','Denied'].map(esc).join(','));
+  Object.keys(byDate)
+    .sort((a,b)=>a.split('/').reverse().join('').localeCompare(b.split('/').reverse().join('')))
+    .forEach(date=>{
+      const dl=byDate[date];
+      lines.push([date,
+        dl.filter(e=>e.event==='ENTRY').length,
+        dl.filter(e=>e.event==='EXIT').length,
+        dl.filter(e=>e.event==='NO-EXIT').length,
+        dl.filter(e=>e.event==='DENIED').length
+      ].map(esc).join(','));
+    });
+
+  const csvContent = lines.join('\r\n');
+  const csvFilename = filename.replace('.xlsx','').replace('.csv','') + '.csv';
+  const file = new File([csvContent], csvFilename, {type:'text/csv'});
+
+  // Web Share API — opens native Android share sheet
+  // User can: Save to Files, Send to Drive, WhatsApp, etc.
+  if (navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({
+      files: [file],
+      title: 'SENTINEL Export — ' + periodLabel
+    }).then(()=>{
+      showToast('✅','Shared successfully','Save to Files or Google Drive','success');
+    }).catch(err=>{
+      if(err.name !== 'AbortError') showToast('⚠️','Share failed',err.message,'error');
+    });
+  } else {
+    // Fallback for desktop or unsupported browsers
+    const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = csvFilename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+    showToast('✅','Download started',csvFilename,'success');
+  }
+}
+function pairDuration(pair) {
+  if(!pair.entry||!pair.exit||pair.noExit) return '—';
+  const sec=toSec(pair.exit)-toSec(pair.entry);
+  if(sec<=0) return 'Bad data';
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  return h>0?`${h}h ${m}m`:m>0?`${m}m ${s}s`:`${s}s`;
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+let toastTimer=null;
+function showToast(icon,msg,sub,type) {
+  const el=document.getElementById('dlToast');
+  document.getElementById('toastIcon').textContent=icon;
+  document.getElementById('toastMsg').textContent=msg;
+  document.getElementById('toastSub').textContent=sub;
+  el.className='';
+  el.classList.add(type||'');
+  setTimeout(()=>el.classList.add('show'),10);
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),5000);
+}
+
+// ── Init ───────────────────────────────────────────────────────
+updateSubBanner();
+if(getSub()) checkSubCatchup();
+
+</script>
+</body>
+</html>
