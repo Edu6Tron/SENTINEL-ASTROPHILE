@@ -43,10 +43,11 @@
       border: 1px solid var(--border); border-radius: 20px;
       padding: 6px 14px; font-size: 13px; font-family: var(--mono);
     }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); transition: background 0.3s; }
     .status-dot.connected { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
     .status-dot.error     { background: var(--denied);  box-shadow: 0 0 8px var(--denied); }
     .status-dot.warn      { background: var(--warn);    box-shadow: 0 0 8px var(--warn); }
+    /* Add this line: */
+    .status-dot.sleep     { background: var(--purple);  box-shadow: 0 0 8px var(--purple); }
 
     /* Download header button */
     .btn-dl-header {
@@ -501,47 +502,60 @@ db.ref('.info/connected').on('value', snap => {
 });
 
 // ── Device heartbeat monitor ──────────────────────────────────
-// ESP32 writes Unix ms timestamp to /heartbeat/lastSeen every 30s.
-// Dashboard checks age: <60s=Online, 60-180s=Idle, >180s=Offline
 const deviceDot  = document.getElementById('deviceDot');
 const deviceText = document.getElementById('deviceText');
 
-db.ref('/heartbeat/lastSeen').on('value', snap => {
-  const ts = snap.val();
-  updateDeviceStatus(ts);
+// Listen to the parent /heartbeat node now
+db.ref('/heartbeat').on('value', snap => {
+  const data = snap.val();
+  if (data) updateDeviceStatus(data.lastSeen, data.state);
+  else updateDeviceStatus(null, null);
 });
 
-function updateDeviceStatus(ts) {
+function updateDeviceStatus(ts, state) {
   if (!ts) {
-    deviceDot.className  = 'status-dot error';
+    deviceDot.className    = 'status-dot error';
     deviceText.textContent = 'No Device';
     deviceText.style.color = 'var(--denied)';
     return;
   }
+  
   const ageMs  = Date.now() - ts;
   const ageSec = Math.floor(ageMs / 1000);
-  if (ageMs < 60000) {
+  
+  // 1. Mark Offline after 15 SECONDS of silence
+  if (ageMs > 15000) { 
+    deviceDot.className    = 'status-dot error';
+    deviceText.textContent = `Device Offline`;
+    deviceText.style.color = 'var(--denied)';
+  } 
+  // 2. Sleep Mode
+  else if (state === 'sleep') {
+    deviceDot.className    = 'status-dot sleep';
+    deviceText.textContent = 'Sleep Mode';
+    deviceText.style.color = 'var(--purple)';
+  } 
+  // 3. Mark Idle after 8 SECONDS of silence
+  else if (ageMs > 8000) {
+    deviceDot.className    = 'status-dot warn';
+    deviceText.textContent = `Device Idle`;
+    deviceText.style.color = 'var(--warn)';
+  } 
+  // 4. Online and Active
+  else {
     deviceDot.className    = 'status-dot connected';
     deviceText.textContent = 'Device Online';
     deviceText.style.color = 'var(--accent2)';
-  } else if (ageMs < 180000) {
-    deviceDot.className    = 'status-dot warn';
-    deviceText.textContent = `Device Idle ${ageSec}s`;
-    deviceText.style.color = 'var(--warn)';
-  } else {
-    deviceDot.className    = 'status-dot error';
-    const mins = Math.floor(ageSec / 60);
-    deviceText.textContent = mins > 60
-      ? `Device Offline ${Math.floor(mins/60)}h ${mins%60}m`
-      : `Device Offline ${mins}m`;
-    deviceText.style.color = 'var(--denied)';
   }
 }
 
-// Refresh age display every 10s even if Firebase doesn't push
+// Refresh the display every 3 seconds so the UI reacts faster
 setInterval(() => {
-  db.ref('/heartbeat/lastSeen').once('value').then(snap => updateDeviceStatus(snap.val()));
-}, 10000);
+  db.ref('/heartbeat').once('value').then(snap => {
+    const data = snap.val();
+    if(data) updateDeviceStatus(data.lastSeen, data.state);
+  });
+}, 3000);
 
 // ── Prefetch & cache all logs (runs on connect) ──────────────────
 function prefetchAllLogs() {
