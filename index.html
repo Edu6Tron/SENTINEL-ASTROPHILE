@@ -555,7 +555,7 @@ setInterval(() => {
     const data = snap.val();
     if(data) updateDeviceStatus(data.tsMs, data.state);
   });
-}, 3000);
+}, 1000);
 
 // ── Prefetch & cache all logs (runs on connect) ──────────────────
 function prefetchAllLogs() {
@@ -612,6 +612,10 @@ function loadLogs() {
   const { val: pickerVal, logDate } = getPickerValue();
   const tableSection = document.getElementById('tableSection'),
         statsRow     = document.getElementById('statsRow');
+  db.ref('/heartbeat').once('value').then(snap => {
+  const data = snap.val();
+  if (data) updateDeviceStatus(data.tsMs, data.state);
+});
   statsRow.classList.remove('visible');
   tableSection.classList.remove('visible');
   tableSection.innerHTML = `<div class="state-box loading"><span class="state-icon">⏳</span><div class="state-title">Loading</div><div class="state-sub">Fetching logs for ${logDate}...</div></div>`;
