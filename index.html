@@ -524,7 +524,7 @@ function updateDeviceStatus(ts, state) {
   const ageSec = Math.floor(ageMs / 1000);
   
   // 1. Mark Offline after 15 SECONDS of silence
-  if (ageMs > 15000) { 
+  if (ageMs > 45000) { 
     deviceDot.className    = 'status-dot error';
     deviceText.textContent = `Device Offline`;
     deviceText.style.color = 'var(--denied)';
@@ -536,7 +536,7 @@ function updateDeviceStatus(ts, state) {
     deviceText.style.color = 'var(--purple)';
   } 
   // 3. Mark Idle after 8 SECONDS of silence
-  else if (ageMs > 8000) {
+  else if (ageMs > 25000) {
     deviceDot.className    = 'status-dot warn';
     deviceText.textContent = `Device Idle`;
     deviceText.style.color = 'var(--warn)';
