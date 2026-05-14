@@ -508,7 +508,7 @@ const deviceText = document.getElementById('deviceText');
 // Listen to the parent /heartbeat node now
 db.ref('/heartbeat').on('value', snap => {
   const data = snap.val();
-  if (data) updateDeviceStatus(data.lastSeen, data.state);
+  if (data) updateDeviceStatus(data.tsMs, data.state);
   else updateDeviceStatus(null, null);
 });
 
@@ -553,7 +553,7 @@ function updateDeviceStatus(ts, state) {
 setInterval(() => {
   db.ref('/heartbeat').once('value').then(snap => {
     const data = snap.val();
-    if(data) updateDeviceStatus(data.lastSeen, data.state);
+    if(data) updateDeviceStatus(data.tsMs, data.state);
   });
 }, 3000);
 
