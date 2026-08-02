@@ -9,6 +9,7 @@
   <meta http-equiv="Expires" content="0">
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -507,7 +508,16 @@
 // ── Firebase config ────────────────────────────────────────────
 const FIREBASE_DB_URL = "https://sentinel-4a4e4-default-rtdb.firebaseio.com/";
 const FIREBASE_API_KEY = "AIzaSyCT5CqJfQw8FNHYBO297t4-EcnrvTrxMi4";
-firebase.initializeApp({ apiKey: FIREBASE_API_KEY, databaseURL: FIREBASE_DB_URL });
+firebase.initializeApp({
+  apiKey: FIREBASE_API_KEY,
+  databaseURL: FIREBASE_DB_URL
+});
+
+// Anonymous authentication for secure database access
+firebase.auth().signInAnonymously()
+  .then(() => console.log("[Auth] Anonymous sign-in successful"))
+  .catch(err => console.error("[Auth]", err));
+
 const db = firebase.database();
 
 // ── Connection status ──────────────────────────────────────────
